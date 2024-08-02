@@ -41,3 +41,33 @@ document.addEventListener("paste", (event: ClipboardEvent) => {
     );
   }
 });
+
+// 클릭이벤트 감지하기 추가!
+document.addEventListener("click", (event: MouseEvent) => {
+  const target = event.target as HTMLElement; // 타입 단언을 사용하여 HTMLElement로 캐스팅
+
+  if (target) {
+    // 클릭된 요소의 정보 수집
+    const tagName: string = target.tagName; // 태그 이름
+    const id: string = target.id; // ID
+    const className: string = target.className; // 클래스 이름
+    const textContent: string | null = target.textContent; // 텍스트 내용
+
+    console.log("Clicked element information:");
+    console.log("Tag Name:", tagName);
+    console.log("ID:", id);
+    console.log("Class Name:", className);
+    console.log("Text Content:", textContent);
+
+    // 수집한 정보를 백그라운드 스크립트에 전송
+    chrome.runtime.sendMessage({
+      type: "clickEvent",
+      data: {
+        tagName,
+        id,
+        className,
+        textContent,
+      },
+    });
+  }
+});
