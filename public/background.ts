@@ -77,25 +77,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // 이벤트 재생 함수
 function replayEvents() {
-  recordedEvents.forEach((eventDetails: ClickEventDetails) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.scripting.executeScript({
-          target: { tabId: tabs[0].id },
-          func: (details: ClickEventDetails) => {
-            const elements = document.elementsFromPoint(details.x, details.y);
-            const targetElement = elements.find(
-              (el) => el.tagName === details.tagName && el.id === details.id,
-            );
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0]?.id) {
+      console.error("이벤트 재생을 위한 활성 탭을 찾을 수 없습니다~!");
+      return;
+    }
 
-            if (targetElement) {
-              (targetElement as HTMLElement).click();
-              console.log("이벤트 재생:", details);
+    const tabId = tabs[0].id;
+
+    recordedEvents.forEach((eventDetails: ClickEventDetails) => {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: (details: ClickEventDetails) => {
+          const elements = document.elementsFromPoint(details.x, details.y);
+          const targetElement = elements.find((el) => {
+            // 태그 이름이 SVGElement에 대한 것인지 확인하기!!!
+            if (el instanceof SVGElement) {
+              return el.tagName.toUpperCase() === details.tagName.toUpperCase();
+            } else {
+              return (
+                el.tagName.toUpperCase() === details.tagName.toUpperCase() &&
+                el.id === details.id
+              );
             }
-          },
-          args: [eventDetails],
-        });
-      }
+          });
+
+          if (targetElement) {
+            if (targetElement instanceof HTMLElement) {
+              // HTML 요소에 대해 클릭 시뮬레이션
+              targetElement.click();
+            } else if (targetElement instanceof SVGElement) {
+              // SVG 요소에 대해 클릭 이벤트 디스패치
+              targetElement.dispatchEvent(
+                new MouseEvent("click", { bubbles: true }),
+              );
+            }
+
+            console.log("이벤트 재생:", details);
+          }
+        },
+        args: [eventDetails],
+      });
     });
   });
 }
