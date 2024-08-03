@@ -99,3 +99,11 @@ function replayEvents() {
     });
   });
 }
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "clearEvents") {
+    recordedEvents = []; // 기록된 이벤트 초기화
+    console.log("이벤트 기록이 초기화되었습니다.");
+    sendResponse({ status: "success" });
+  }
+});
