@@ -76,50 +76,86 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // 이벤트 재생 함수
-function replayEvents() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs[0]?.id) {
-      console.error("이벤트 재생을 위한 활성 탭을 찾을 수 없습니다~!");
-      return;
-    }
+async function replayEvents() {
+  console.log("이벤트 재생 시작");
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    const tabId = tabs[0].id;
+  if (!tabs[0]?.id) {
+    console.error("이벤트 재생을 위한 활성 탭을 찾을 수 없습니다!");
+    return;
+  }
 
-    recordedEvents.forEach((eventDetails: ClickEventDetails) => {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: (details: ClickEventDetails) => {
-          const elements = document.elementsFromPoint(details.x, details.y);
-          const targetElement = elements.find((el) => {
-            // 태그 이름이 SVGElement에 대한 것인지 확인하기!!!
-            if (el instanceof SVGElement) {
-              return el.tagName.toUpperCase() === details.tagName.toUpperCase();
-            } else {
-              return (
-                el.tagName.toUpperCase() === details.tagName.toUpperCase() &&
-                el.id === details.id
+  const tabId = tabs[0].id;
+  console.log(`현재 탭 ID: ${tabId}`);
+
+  // 비동기적으로 각 이벤트를 실행
+  for (const eventDetails of recordedEvents) {
+    console.log("이벤트 세부사항:", eventDetails);
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: async (details) => {
+        console.log("스크립트 실행: 페이지 로드 대기");
+
+        const waitForPageLoad = async () => {
+          await new Promise<void>((resolve) => {
+            if (document.readyState !== "complete") {
+              console.log(
+                "페이지가 아직 로드되지 않았습니다. 로드를 기다립니다.",
               );
+              window.addEventListener(
+                "load",
+                () => {
+                  console.log("페이지 로드 완료");
+                  resolve();
+                },
+                { once: true },
+              );
+            } else {
+              console.log("페이지가 이미 로드되었습니다.");
+              resolve();
             }
           });
+        };
 
-          if (targetElement) {
-            if (targetElement instanceof HTMLElement) {
-              // HTML 요소에 대해 클릭 시뮬레이션
-              targetElement.click();
-            } else if (targetElement instanceof SVGElement) {
-              // SVG 요소에 대해 클릭 이벤트 디스패치
-              targetElement.dispatchEvent(
-                new MouseEvent("click", { bubbles: true }),
-              );
-            }
+        // 페이지 로드 완료 대기
+        await waitForPageLoad();
 
-            console.log("이벤트 재생:", details);
+        const elements = document.elementsFromPoint(details.x, details.y);
+        const targetElement = elements.find((el) => {
+          if (el instanceof SVGElement) {
+            return el.tagName.toUpperCase() === details.tagName.toUpperCase();
+          } else {
+            return (
+              el.tagName.toUpperCase() === details.tagName.toUpperCase() &&
+              el.id === details.id
+            );
           }
-        },
-        args: [eventDetails],
-      });
+        });
+
+        if (targetElement) {
+          if (targetElement instanceof HTMLElement) {
+            targetElement.click();
+            console.log("HTML 요소 클릭:", details);
+          } else if (targetElement instanceof SVGElement) {
+            targetElement.dispatchEvent(
+              new MouseEvent("click", { bubbles: true }),
+            );
+            console.log("SVG 요소 클릭:", details);
+          }
+        } else {
+          console.warn("대상 요소를 찾지 못했습니다:", details);
+        }
+      },
+      args: [eventDetails],
     });
-  });
+
+    // 각 이벤트 간의 지연 시간을 추가하여 페이지가 변경될 경우 대기
+    console.log("이벤트 간 대기 중...");
+    await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+  }
+
+  console.log("모든 이벤트 재생 완료");
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
